@@ -1,0 +1,44 @@
+pool:
+  name: 'myagentpool'
+
+steps:
+# Configure Git
+- script: |
+    git config --global user.email "pipeline@example.com"
+    git config --global user.name "Azure Pipeline"
+  displayName: 'Configure Git'
+
+# Read and increment version
+- script: |
+    VERSION=$(cat version.txt)
+    MAJOR=$(echo $VERSION | cut -d. -f1)
+    MINOR=$(echo $VERSION | cut -d. -f2)
+    PATCH=$(echo $VERSION | cut -d. -f3)
+    PATCH=$((PATCH+1))
+    NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+    echo $NEW_VERSION > version.txt
+    echo "New version: $NEW_VERSION"
+    
+    # Commit and push the new version
+    git add version.txt
+    git commit -m "Increment version to $NEW_VERSION [skip ci]"
+    git push origin HEAD:master
+  displayName: 'Increment Version'
+
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'build'
+    projects: '**/*.csproj'
+
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'publish'
+    publishWebProjects: false
+    projects: '**/*.csproj'
+    arguments: '--configuration Release --output $(Build.ArtifactStagingDirectory)'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
